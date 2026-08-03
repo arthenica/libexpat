@@ -29,6 +29,10 @@
    USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+#if defined(XML_UNICODE) && defined(XML_UNICODE_WCHAR_T)
+#  include <wchar.h>
+#endif
+
 static size_t
 xcslen(const XML_Char *s) {
 #ifdef XML_UNICODE
