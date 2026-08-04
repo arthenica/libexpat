@@ -101,6 +101,8 @@ jobs:
         cmake_args=(
           -A "${cmake_platform}"
           -G "${cmake_generator}"
+          # NOTE: The double slashes work around a problem with MSVC
+          -DCMAKE_{C,CXX}_FLAGS='//fsanitize=address //Zi'
           -DCMAKE_BUILD_TYPE="${cmake_build_type}"
           -DEXPAT_CHAR_TYPE="${expat_char_type}"
           -DEXPAT_WARNINGS_AS_ERRORS=ON
