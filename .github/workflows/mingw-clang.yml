@@ -43,13 +43,13 @@ permissions:
 jobs:
   mingw_clang:
     name: Compile and test with Clang-based MinGW (${{ matrix.mingw_arch }}, ${{ matrix.name }})
-    timeout-minutes: 15
+    timeout-minutes: 200
     strategy:
       fail-fast: false
       matrix:
         include:
-          - name: char
-            cmake_args: -DEXPAT_CHAR_TYPE=char
+          - name: wchar_t
+            cmake_args: -DEXPAT_CHAR_TYPE=wchar_t
             mingw_arch: i686
             wine_arch: win32
             wine_packages: wine32:i386 wine32-preloader:i386
@@ -166,8 +166,4 @@ jobs:
 
         make -C build CTEST_OUTPUT_ON_FAILURE=1 test
 
-        # Bypass `run-xmltest` on 64bit because it takes forever,
-        # needs more debugging
-        if [[ ${mingw_arch} != x86_64 ]]; then
-            ${retry} make -C build run-xmltest
-        fi
+        ${retry} make -C build run-xmltest
