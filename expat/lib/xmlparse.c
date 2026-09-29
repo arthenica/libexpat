@@ -2990,6 +2990,9 @@ XML_ErrorString(enum XML_Error code) {
   /* Added in 2.6.4. */
   case XML_ERROR_NOT_STARTED:
     return XML_L("parser not started");
+  /* Added in 2.9.0. */
+  case XML_ERROR_BAD_PREDEFINED_ENTITY_REDEFINITION:
+    return XML_L("bad redefinition of predefined entity");
   }
   return NULL;
 }
@@ -5228,6 +5231,45 @@ prologProcessor(XML_Parser parser, const char *s, const char *end,
                   XML_ACCOUNT_DIRECT);
 }
 
+#if XML_GE == 1
+static bool
+isBadRedefinitionOfPredefinedEntity(XML_Parser parser, const XML_Char *name,
+                                    const XML_Char *valuePtr,
+                                    const size_t ValueLen) {
+  const XML_Char *const valueEnd = valuePtr + ValueLen;
+  const ENCODING *const encoding = parser->m_internalEncoding;
+
+  const int predefinedEntity
+      = encoding->predefinedEntityName(encoding, name, name + xcslen(name));
+
+  switch (predefinedEntity) {
+  case ASCII_AMP:
+    return ! XmlNameMatchesAscii(parser->m_internalEncoding, valuePtr, valueEnd,
+                                 "&#38;")
+           && ! XmlNameMatchesAscii(parser->m_internalEncoding, valuePtr,
+                                    valueEnd, "&#x26;");
+  case ASCII_APOS:
+    return ! XmlNameMatchesAscii(parser->m_internalEncoding, valuePtr, valueEnd,
+                                 "'");
+  case ASCII_GT:
+    return ! XmlNameMatchesAscii(parser->m_internalEncoding, valuePtr, valueEnd,
+                                 ">");
+  case ASCII_LT:
+    return ! XmlNameMatchesAscii(parser->m_internalEncoding, valuePtr, valueEnd,
+                                 "&#60;")
+           && ! XmlNameMatchesAscii(parser->m_internalEncoding, valuePtr,
+                                    valueEnd, "&#x3c;")
+           && ! XmlNameMatchesAscii(parser->m_internalEncoding, valuePtr,
+                                    valueEnd, "&#x3C;");
+  case ASCII_QUOT:
+    return ! XmlNameMatchesAscii(parser->m_internalEncoding, valuePtr, valueEnd,
+                                 "\"");
+  default:
+    return false;
+  }
+}
+#endif // XML_GE == 1
+
 static enum XML_Error
 doProlog(XML_Parser parser, const ENCODING *enc, const char *s, const char *end,
          int tok, const char *next, const char **nextPtr, XML_Bool haveMore,
@@ -5691,6 +5733,17 @@ doProlog(XML_Parser parser, const ENCODING *enc, const char *s, const char *end,
           parser->m_declEntity->textLen
               = (int)(poolLength(&dtd->entityValuePool));
           poolFinish(&dtd->entityValuePool);
+
+          // Detect and reject bad redefinitions of predefined general
+          // entities (section "4.6 Predefined Entities" of XML 1.0r4)
+          if (! parser->m_declEntity->is_param
+              && isBadRedefinitionOfPredefinedEntity(
+                  parser, parser->m_declEntity->name,
+                  parser->m_declEntity->textPtr,
+                  parser->m_declEntity->textLen)) {
+            return XML_ERROR_BAD_PREDEFINED_ENTITY_REDEFINITION;
+          }
+
           if (parser->m_entityDeclHandler) {
             *eventEndPP = s;
             beforeHandler(parser);
@@ -5839,10 +5892,6 @@ doProlog(XML_Parser parser, const ENCODING *enc, const char *s, const char *end,
       }
       break;
     case XML_ROLE_GENERAL_ENTITY_NAME: {
-      if (XmlPredefinedEntityName(enc, s, next)) {
-        parser->m_declEntity = NULL;
-        break;
-      }
       if (dtd->keepProcessing) {
         const XML_Char *name = poolStoreString(&dtd->pool, enc, s, next);
         if (! name)

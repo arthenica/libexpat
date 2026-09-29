@@ -4351,17 +4351,102 @@ START_TEST(test_attribute_enum_value) {
 }
 END_TEST
 
-/* Slightly bizarrely, the library seems to silently ignore entity
- * definitions for predefined entities, even when they are wrong.  The
- * language of the XML 1.0 spec is somewhat unhelpful as to what ought
- * to happen, so this is currently treated as acceptable.
- */
 START_TEST(test_predefined_entity_redefinition) {
-  const char *text = "<!DOCTYPE doc [\n"
-                     "<!ENTITY apos 'foo'>\n"
-                     "]>\n"
-                     "<doc>&apos;</doc>";
-  run_character_check(text, XCS("'"));
+  struct TestCase {
+    const char *comment;
+    const char *entityLine;
+    enum XML_Error expectedError;
+  };
+
+  struct TestCase testCases[] = {
+      // General entity, redefine correctly, decimal
+      {"Redefine &amp; correctly decimal", "<!ENTITY amp '&#38;#38;'>",
+       XML_ERROR_NONE},
+      {"Redefine &apos; correctly decimal", "<!ENTITY apos '&#39;'>",
+       XML_ERROR_NONE},
+      {"Redefine &gt; correctly decimal", "<!ENTITY gt '&#62;'>",
+       XML_ERROR_NONE},
+      {"Redefine &lt; correctly decimal", "<!ENTITY lt '&#38;#60;'>",
+       XML_ERROR_NONE},
+      {"Redefine &quot; correctly decimal", "<!ENTITY quot '&#34;'>",
+       XML_ERROR_NONE},
+      //
+      // General entity, redefine correctly, hexadecimal
+      {"Redefine &amp; correctly hexadecimal 1", "<!ENTITY amp '&#x26;#38;'>",
+       XML_ERROR_NONE},
+      {"Redefine &amp; correctly hexadecimal 2", "<!ENTITY amp '&#38;#x26;'>",
+       XML_ERROR_NONE},
+      {"Redefine &amp; correctly hexadecimal 3", "<!ENTITY amp '&#x26;#x26;'>",
+       XML_ERROR_NONE},
+      {"Redefine &apos; correctly hexadecimal", "<!ENTITY apos '&#x27;'>",
+       XML_ERROR_NONE},
+      {"Redefine &gt; correctly hexadecimal 1", "<!ENTITY gt '&#x3e;'>",
+       XML_ERROR_NONE},
+      {"Redefine &gt; correctly hexadecimal 2", "<!ENTITY gt '&#x3E;'>",
+       XML_ERROR_NONE},
+      {"Redefine &lt; correctly hexadecimal 1", "<!ENTITY lt '&#x26;#60;'>",
+       XML_ERROR_NONE},
+      {"Redefine &lt; correctly hexadecimal 2", "<!ENTITY lt '&#38;#x3c;'>",
+       XML_ERROR_NONE},
+      {"Redefine &lt; correctly hexadecimal 3", "<!ENTITY lt '&#38;#x3C;'>",
+       XML_ERROR_NONE},
+      {"Redefine &lt; correctly hexadecimal 4", "<!ENTITY lt '&#x26;#x3c;'>",
+       XML_ERROR_NONE},
+      {"Redefine &lt; correctly hexadecimal 5", "<!ENTITY lt '&#x26;#x3C;'>",
+       XML_ERROR_NONE},
+      {"Redefine &quot; correctly hexadecimal", "<!ENTITY quot '&#x22;'>",
+       XML_ERROR_NONE},
+      //
+      // General entity, redefine incorrectly
+      {"Redefine &amp; incorrectly", "<!ENTITY amp 'forbidden'>",
+       XML_ERROR_BAD_PREDEFINED_ENTITY_REDEFINITION},
+      {"Redefine &apos; incorrectly", "<!ENTITY apos 'forbidden'>",
+       XML_ERROR_BAD_PREDEFINED_ENTITY_REDEFINITION},
+      {"Redefine &gt; incorrectly", "<!ENTITY gt 'forbidden'>",
+       XML_ERROR_BAD_PREDEFINED_ENTITY_REDEFINITION},
+      {"Redefine &lt; incorrectly", "<!ENTITY lt 'forbidden'>",
+       XML_ERROR_BAD_PREDEFINED_ENTITY_REDEFINITION},
+      {"Redefine &quot; incorrectly", "<!ENTITY quot 'forbidden'>",
+       XML_ERROR_BAD_PREDEFINED_ENTITY_REDEFINITION},
+      //
+      // General entity name-clash but wrong case
+      {"Define &AMP;", "<!ENTITY AMP 'anything'>", XML_ERROR_NONE},
+      {"Define &APOS;", "<!ENTITY APOS 'anything'>", XML_ERROR_NONE},
+      {"Define &GT;", "<!ENTITY GT 'anything'>", XML_ERROR_NONE},
+      {"Define &LT;", "<!ENTITY LT 'anything'>", XML_ERROR_NONE},
+      {"Define &QUOT;", "<!ENTITY QUOT 'anything'>", XML_ERROR_NONE},
+      //
+      // Parameter entity name-clash
+      {"Define %amp;", "<!ENTITY % amp 'anything'>", XML_ERROR_NONE},
+      {"Define %apos;", "<!ENTITY % apos 'anything'>", XML_ERROR_NONE},
+      {"Define %gt;", "<!ENTITY % gt 'anything'>", XML_ERROR_NONE},
+      {"Define %lt;", "<!ENTITY % lt 'anything'>", XML_ERROR_NONE},
+      {"Define %quot;", "<!ENTITY % quot 'anything'>", XML_ERROR_NONE},
+  };
+
+  for (size_t i = 0; i < sizeof(testCases) / sizeof(testCases[0]); i++) {
+    set_subtest("%s", testCases[i].comment);
+
+    const enum XML_Error expectedError = testCases[i].expectedError;
+    const char *const before = "<!DOCTYPE doc [\n";
+    const char *const entityLine = testCases[i].entityLine;
+    const char *const after = "]><doc/>\n";
+
+    XML_Parser parser = XML_ParserCreate(NULL);
+
+    assert_true(
+        XML_Parse(parser, before, (int)strlen(before), /*isFinal=*/XML_FALSE)
+        == XML_STATUS_OK);
+    XML_Parse(parser, entityLine, (int)strlen(entityLine),
+              /*isFinal=*/XML_FALSE);
+    XML_Parse(parser, after, (int)strlen(after), /*isFinal=*/XML_TRUE);
+
+    const enum XML_Error actualError = XML_GetErrorCode(parser);
+
+    XML_ParserFree(parser);
+
+    assert_true(actualError == expectedError);
+  }
 }
 END_TEST
 
