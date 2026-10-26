@@ -789,11 +789,20 @@ XML_GetIdAttributeIndex(XML_Parser parser);
 XMLPARSEAPI(enum XML_Status)
 XML_Parse(XML_Parser parser, const char *s, int len, int isFinal);
 
+XMLPARSEAPI(enum XML_Status)
+XML_Parse64(XML_Parser parser, const char *s, size_t len, XML_Bool isFinal);
+
 XMLPARSEAPI(void *)
 XML_GetBuffer(XML_Parser parser, int len);
 
+XMLPARSEAPI(void *)
+XML_GetBuffer64(XML_Parser parser, size_t len);
+
 XMLPARSEAPI(enum XML_Status)
 XML_ParseBuffer(XML_Parser parser, int len, int isFinal);
+
+XMLPARSEAPI(enum XML_Status)
+XML_ParseBuffer64(XML_Parser parser, size_t len, XML_Bool isFinal);
 
 /* Stops parsing, causing XML_Parse() or XML_ParseBuffer() to return.
    Must be called from within a call-back handler, except when aborting
