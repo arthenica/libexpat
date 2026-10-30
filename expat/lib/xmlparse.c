@@ -315,10 +315,10 @@ typedef struct {
   enum XML_Content_Type type;
   enum XML_Content_Quant quant;
   const XML_Char *name;
-  int firstchild;
-  int lastchild;
-  int childcnt;
-  int nextsib;
+  size_t firstchild;
+  size_t lastchild;
+  size_t childcnt;
+  size_t nextsib;
 } CONTENT_SCAFFOLD;
 
 #define INIT_SCAFFOLD_ELEMENTS 32
@@ -9207,7 +9207,7 @@ static int
 nextScaffoldPart(XML_Parser parser) {
   DTD *const dtd = parser->m_dtd; /* save one level of indirection */
   CONTENT_SCAFFOLD *me;
-  int next;
+  size_t next;
 
   if (! dtd->scaffIndex) {
     /* Detect and prevent integer overflow. */
@@ -9256,7 +9256,7 @@ nextScaffoldPart(XML_Parser parser) {
     }
     dtd->scaffold = temp;
   }
-  next = (int)dtd->scaffCount++;
+  next = dtd->scaffCount++;
   me = &dtd->scaffold[next];
   if (dtd->scaffLevel) {
     CONTENT_SCAFFOLD *parent
@@ -9397,15 +9397,24 @@ build_model(XML_Parser parser) {
       dest->children = NULL;
     } else {
       unsigned int i;
-      int cn;
+      size_t cn;
+      if (dtd->scaffold[src_node].childcnt > UINT_MAX) {
+        parser->m_mem.free_fcn(ret);
+        return NULL;
+      }
       dest->name = NULL;
       dest->numchildren = dtd->scaffold[src_node].childcnt;
       dest->children = jobDest;
 
       /* Append scaffold indices of children to array */
       for (i = 0, cn = dtd->scaffold[src_node].firstchild;
-           i < dest->numchildren; i++, cn = dtd->scaffold[cn].nextsib)
+           i < dest->numchildren; i++, cn = dtd->scaffold[cn].nextsib) {
+        if (cn > UINT_MAX) {
+          parser->m_mem.free_fcn(ret);
+          return NULL;
+        }
         (jobDest++)->numchildren = (unsigned int)cn;
+      }
     }
   }
 
